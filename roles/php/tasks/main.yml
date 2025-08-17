@@ -1,0 +1,24 @@
+---
+- block:
+    - name: Install PHP and required modules (Fedora)
+      dnf:
+        name:
+          - php
+          - php-cli
+          - php-mysqlnd
+          - php-opcache
+          - php-gd
+          - php-xml
+        state: present
+        update_cache: true
+      notify: Restart Apache
+      become: true
+  rescue:
+    - name: Notify failure in PHP installation
+      debug:
+        msg: "Failed to install PHP or one of the required modules."
+  always:
+    - name: Always run this task after PHP install attempt
+      debug:
+        msg: "PHP installation block finished (success or fail)."
+

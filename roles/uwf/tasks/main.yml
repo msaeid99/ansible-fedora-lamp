@@ -1,0 +1,56 @@
+---
+- name: Install firewalld
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  become: true
+
+- name: Ensure firewalld is running and enabled
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  become: true
+
+- name: Allow SSH
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+
+- name: Allow HTTP
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+
+- name: Allow HTTPS
+  ansible.posix.firewalld:
+    service: https
+    permanent: true
+    state: enabled
+    immediate: true
+  become: true
+
+- name: Show firewalld active zones
+  ansible.builtin.command: firewall-cmd --get-active-zones
+  register: fw_zones
+  changed_when: false
+  become: true
+
+- name: Show firewalld rules in public zone
+  ansible.builtin.command: firewall-cmd --zone=public --list-all
+  register: fw_public
+  changed_when: false
+  become: true
+
+- name: Debug firewalld status
+  ansible.builtin.debug:
+    msg:
+      - "Active zones: {{ fw_zones.stdout }}"
+      - "Public zone:\n{{ fw_public.stdout }}"
+

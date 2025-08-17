@@ -1,0 +1,26 @@
+- name: Install Apache (Fedora)
+  dnf:
+    name: httpd
+    state: present
+    update_cache: true
+  become: true
+
+- block:
+    - name: Deploy sample index.php
+      template:
+        src: index.php.j2
+        dest: /var/www/html/index.php
+        mode: '0644'
+      notify: Restart Apache
+  rescue:
+    - name: Log failure of Apache index.php deployment
+      debug:
+        msg: "Failed to deploy index.php"
+  always:
+    - name: Always run - ensure Apache is running
+      service:
+        name: httpd          # بدل apache2
+        state: started       # صحّح started
+        enabled: true
+      become: true
+

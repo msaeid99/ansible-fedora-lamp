@@ -1,0 +1,12 @@
+---
+# يعمل على Fedora (httpd) ويمكن توسيعه لأنظمة أخرى
+- name: restart httpd
+  ansible.builtin.service:
+    name: httpd
+    state: restarted
+  become: true
+  listen:
+    - Restart Apache          # الاسم الذي تناديه من أي دور (php)
+    - restart apache
+    - restart webserver
+

@@ -1,0 +1,48 @@
+---
+- name: Deploy LAMP stack (Fedora target)
+  hosts: web
+  become: true
+  gather_facts: true
+
+  # نجبر استخدام dnf4 ونحدد إعدادات اتصال MySQL لكل الموديولات
+  module_defaults:
+    ansible.builtin.dnf:
+      use_backend: dnf4
+
+    community.mysql.mysql_db:
+      login_user: root
+      login_password: "{{ mysql_root_password | default(omit) }}"
+      login_unix_socket: /var/lib/mysql/mysql.sock
+      check_implicit_admin: true
+
+    community.mysql.mysql_user:
+      login_user: root
+      login_password: "{{ mysql_root_password | default(omit) }}"
+      login_unix_socket: /var/lib/mysql/mysql.sock
+      check_implicit_admin: true
+
+    community.mysql.mysql_query:
+      login_user: root
+      login_password: "{{ mysql_root_password | default(omit) }}"
+      login_unix_socket: /var/lib/mysql/mysql.sock
+      check_implicit_admin: true
+
+    # ملاحظة: mysql_info لا يدعم check_implicit_admin في إصدارك
+    community.mysql.mysql_info:
+      login_user: root
+      login_password: "{{ mysql_root_password | default(omit) }}"
+      login_unix_socket: /var/lib/mysql/mysql.sock
+
+  pre_tasks:
+    - name: Ensure python3-dnf present (dnf4 backend)
+      ansible.builtin.shell: dnf -y install python3-dnf
+      register: dnf4_install
+      changed_when: "'Nothing to do' not in (dnf4_install.stdout | default(''))"
+      failed_when: dnf4_install.rc not in [0]
+
+  roles:
+    - uwf      # firewalld (حسب مسارك: roles/uwf)
+    - apache   # httpd على Fedora
+    - php      # php + php-mysqlnd
+    - mysql    # mariadb + DB/User + فحوصات
+

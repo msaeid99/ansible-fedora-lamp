@@ -1,0 +1,14 @@
+- name: Install Apache (Fedora)
+  dnf:
+    name: httpd
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure Apache is started and enabled (Fedora)
+  service:
+    name: httpd
+    state: started
+    enabled: true
+  become: true
+

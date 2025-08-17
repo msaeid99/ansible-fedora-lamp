@@ -1,0 +1,137 @@
+---
+# roles/mysql/tasks/main.yml  (Fedora + MariaDB + فحص + ريكفري اختياري)
+
+# متغيرات افتراضية محلية للسوكت واسم/يوزر قاعدة التطبيق
+- name: Set local defaults
+  ansible.builtin.set_fact:
+    mysql_socket: "{{ db_socket | default('/var/lib/mysql/mysql.sock') }}"
+    myapp_db_name: "{{ myapp_db_name | default('myapp') }}"
+    myapp_db_user: "{{ myapp_db_user | default('myapp_user') }}"
+  become: true
+
+- name: Install PyMySQL
+  ansible.builtin.dnf:
+    name: python3-PyMySQL
+    state: present
+    update_cache: true
+  become: true
+
+- name: Install MariaDB server
+  ansible.builtin.dnf:
+    name: mariadb-server
+    state: present
+  become: true
+
+- name: Enable & start MariaDB
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+  become: true
+
+- name: Wait for MariaDB UNIX socket
+  ansible.builtin.wait_for:
+    path: "{{ mysql_socket }}"
+    state: present
+    timeout: 60
+  become: true
+
+# ---------------- فحص الاتصال (نمرّر الباسورد صراحةً) ----------------
+- name: Check MySQL connectivity via socket as root
+  community.mysql.mysql_info:
+    login_user: root
+    login_password: "{{ mysql_root_password | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  register: mysql_conn_ok
+  ignore_errors: true
+  no_log: true
+  become: true
+# ---------------------------------------------------------------------
+
+# ---------------- ريكفري اختياري لو الفحص فشل ----------------
+- block:
+    - name: Enable skip-grant-tables drop-in
+      ansible.builtin.copy:
+        dest: /etc/my.cnf.d/zz-reset-root.cnf
+        content: |
+          [mysqld]
+          skip-grant-tables
+          skip-networking=0
+      become: true
+
+    - name: Restart MariaDB with skip-grant-tables
+      ansible.builtin.service:
+        name: mariadb
+        state: restarted
+      become: true
+
+    # MariaDB 10.4+: التعديل على mysql.global_priv (عمود JSON)
+    - name: Force root plugin+password via global_priv (JSON)
+      ansible.builtin.shell: >
+        mysql -S {{ mysql_socket }} -u root -e
+        "UPDATE mysql.global_priv
+           SET Priv = JSON_SET(Priv,
+                               '$.plugin','mysql_native_password',
+                               '$.authentication_string',PASSWORD('{{ mysql_root_password }}'))
+         WHERE User='root' AND Host='localhost';"
+      no_log: true
+      become: true
+
+    - name: Remove skip-grant-tables drop-in
+      ansible.builtin.file:
+        path: /etc/my.cnf.d/zz-reset-root.cnf
+        state: absent
+      become: true
+
+    - name: Restart MariaDB normally
+      ansible.builtin.service:
+        name: mariadb
+        state: restarted
+      become: true
+
+    - name: Re-check MySQL connectivity after reset (with password)
+      community.mysql.mysql_info:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: "{{ mysql_socket }}"
+      register: mysql_conn_ok_after
+      no_log: true
+      become: true
+  when:
+    - mysql_conn_ok is failed
+    - mysql_root_password is defined
+# ----------------------------------------------------------------
+
+# ---------------- إنشاء قاعدة و يوزر التطبيق ----------------
+- name: Ensure app DB exists
+  community.mysql.mysql_db:
+    name: "{{ myapp_db_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  become: true
+
+- name: Ensure app DB user (TCP via 127.0.0.1)
+  community.mysql.mysql_user:
+    name: "{{ myapp_db_user }}"
+    host: 127.0.0.1
+    password: "{{ myapp_db_password }}"
+    priv: "{{ myapp_db_name }}.*:ALL"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password | default(omit) }}"
+    login_unix_socket: "{{ mysql_socket }}"
+  when: myapp_db_password is defined
+  no_log: true
+  become: true
+# -----------------------------------------------------------
+
+# SELinux: اسمح لـ httpd يتصل بقاعدة البيانات
+- name: Allow httpd to connect to DB (SELinux)
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect_db
+    state: true
+    persistent: true
+  become: true
+

@@ -1,0 +1,22 @@
+# Ansible
+*.retry
+*.log
+vault-pass.txt
+inventories/*/host_vars/**/*
+inventories/*/group_vars/**/*
+
+# SSH keys
+*.pem
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.key
+
+# Editors & OS
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.swp
+*.swo
